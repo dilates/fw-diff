@@ -28,5 +28,10 @@ RUN curl -sSL -o /tmp/ghidra.zip \
 
 ENV PATH="/opt/venv/bin:$PATH"
 RUN useradd -m worker
+# Pre-seed Ghidra's JDK discovery (LaunchSupport's /usr/lib/jvm scan is unreliable in
+# containers): the save file format is a single line containing the JDK home
+RUN mkdir -p /home/worker/.config/ghidra/ghidra_11.3.2_PUBLIC \
+    && echo "$JAVA_HOME" > /home/worker/.config/ghidra/ghidra_11.3.2_PUBLIC/java_home.save \
+    && chown -R worker:worker /home/worker/.config
 USER worker
 ENTRYPOINT ["python3", "-m", "fw_diff.worker"]
