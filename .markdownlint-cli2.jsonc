@@ -1,0 +1,14 @@
+{
+  "config": {
+    "MD013": false,
+    "MD041": false,
+    "MD033": false,
+    "MD036": false,
+    "MD032": false,
+    "MD022": false,
+    "MD040": false,
+    "MD047": false
+  },
+  "globs": ["**/*.md"],
+  "ignores": ["**/.venv/**"]
+}

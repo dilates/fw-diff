@@ -206,8 +206,7 @@ def _sha_of_policy(policy: dict[str, Any] | None) -> str | None:
 
     if policy is None:
         return None
-    return hashlib.sha256(
-        json.dumps(policy, sort_keys=True, default=str).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(policy, sort_keys=True, default=str).encode()).hexdigest()
 
 
 def _render_all(doc: FactsDoc, out_dir: Path) -> dict[str, Path]:

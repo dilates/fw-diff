@@ -181,8 +181,7 @@ def render_html(doc: FactsDoc) -> str:
 
     provenance = ""
     if any(c.explain for c in doc.changes):
-        first_prov: dict[str, Any] = next(
-            c.explain.provenance for c in doc.changes if c.explain)
+        first_prov: dict[str, Any] = next(c.explain.provenance for c in doc.changes if c.explain)
         provenance = f'<p class="meta">LLM provenance: {e(str(first_prov))}</p>'
 
     return (

@@ -80,7 +80,9 @@ jobs:
             https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_11.3.2_build/ghidra_11.3.2_PUBLIC_20250415.zip
           unzip -q ghidra.zip && echo "GHIDRA_INSTALL_DIR=$PWD/ghidra_11.3.2_PUBLIC" >> "$GITHUB_ENV"
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --extra dev --extra ghidra
+      - run: uv sync --extra dev
+      # PyPI pyghidra >=2.0.1 requires Ghidra 12; install the wheel bundled with 11.3.2
+      - run: uv pip install "$GHIDRA_INSTALL_DIR"/Ghidra/Features/PyGhidra/pypkg/dist/pyghidra-*.whl
       - run: uv run pytest -m ghidra
 
   eval:
