@@ -5,6 +5,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 (see [docs/release-process.md](docs/release-process.md)). `facts.json` schema has its own
 version field and [compatibility policy](docs/design/report-format.md#compatibility).
 
+## [0.2.0a1] — 2026-09-30
+
+### Added
+- **SARIF 2.1 output** (`sarif.json`): high-relevance changes -> warnings with evidence,
+  medium -> notes; ready for GitHub code scanning.
+- **Docker worker mode** (ADR-0008 realized): `--worker-mode docker|auto` lifts untrusted
+  images in a sandboxed container (no network, read-only rootfs, mem/cpu/pids caps,
+  tmpfs scratch); `docker/ghidra-worker.Dockerfile` pins Ghidra 11.3.2 + bundled pyghidra;
+  results cross the boundary as IR-bundle data. `ci` defaults to `auto`.
+- **Blob-level lift cache** across sessions: cache key = file sha256 + lift params;
+  payload carries the Ghidra version, so upgrades invalidate automatically.
+- **S3 embedding stage** (optional `embed` extra, fastembed/ONNX): ambiguity margin rule
+  enforced; model recorded in session config; stage honestly skipped when unavailable.
+- **Per-arch threshold overrides** (`Thresholds.for_arch`) + S0 same-name pins (same raw
+  Ghidra name = same function by construction).
+- **HTML report filters** (vanilla JS, still single-file offline): text search +
+  relevance checkboxes.
+- **Explainer coverage retry pass**: changes the model skipped in batched requests are
+  retried individually; `change_id` key drift tolerated. Eval gate on a 4B local model:
+  coverage 1.0, correctness 1.0, 0 factuality violations.
+- **Eval harness** (`pytest -m eval`): factuality/correctness/coverage rubric vs local
+  Ollama on the corpus pair; scores -> docs/evals/.
+- Corpus cases: `crypto-swap`, `new-feature`, `dead-function-removed` (synthetic IR).
+- Worker/perf CI jobs; perf smoke test (`pytest -m perf`).
+
+### Fixed
+- Worker container: double invocation via ENTRYPOINT, mount-relative io paths,
+  JDK discovery in containers (JAVA_HOME_OVERRIDE; full JDK base image).
+- `remove_session` GC semantics; HTML table header duplication.
+
 ## [0.1.0a1] — 2026-09-30
 
 ### Added
