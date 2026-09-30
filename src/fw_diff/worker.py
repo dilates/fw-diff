@@ -81,11 +81,11 @@ def lift_in_container(
         *_docker_run_args(workdir, memory, cpus),
         image,
         "--input",
-        f"/io/{in_path.name}",
+        f"/io/worker_io/{in_path.name}",
         "--arch",
         target.arch,
         "--out",
-        f"/io/{out_path.name}",
+        f"/io/worker_io/{out_path.name}",
     ]
     if target.base is not None:
         cmd += ["--base", str(target.base)]
