@@ -76,12 +76,10 @@ def lift_in_container(
     shutil.copyfile(target.path, in_path)
     out_path = io_dir / f"{in_path.name}.ir.json"
 
+    # ENTRYPOINT is `python3 -m fw_diff.worker` (Dockerfile): pass args only
     cmd = [
         *_docker_run_args(workdir, memory, cpus),
         image,
-        "python3",
-        "-m",
-        "fw_diff.worker",
         "--input",
         f"/io/{in_path.name}",
         "--arch",

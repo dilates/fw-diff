@@ -90,4 +90,7 @@ filterwarnings = ["error::DeprecationWarning:fw_diff.*"]
 
 [tool.coverage.run]
 source = ["src/fw_diff"]
-omit = ["src/fw_diff/demo/*"]
+omit = [
+    "src/fw_diff/demo/*",
+    "src/fw_diff/worker.py",  # exercised by the docker `worker` CI job (ADR-0008)
+]
