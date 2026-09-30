@@ -1,0 +1,12 @@
+{
+  "ignorePatterns": [
+    {"pattern": "^http://(127\\.0\\.0\\.1|localhost)"},
+    {"pattern": "^https://ghidra-sre\\.org"}
+  ],
+  "replacementPatterns": [],
+  "httpHeaders": [],
+  "timeout": "10s",
+  "retryOn429": true,
+  "retryCount": 2,
+  "aliveStatusCodes": [200, 206, 301, 302, 403]
+}

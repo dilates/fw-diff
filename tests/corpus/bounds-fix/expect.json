@@ -1,0 +1,23 @@
+{
+  "case": "bounds-fix",
+  "description": "bound clamp inserted before memcpy in parse_header; version bump; crypto constant swap; legacy auth call removed",
+  "must_tag": [
+    {"classifier": "bound_change", "function": "FUN_4001a3c0", "relevance": "high"},
+    {"classifier": "branch_insert", "function": "FUN_4001a3c0"},
+    {"classifier": "crypto_constant_change", "function": "FUN_4001a5e0"},
+    {"classifier": "constant_change", "function": "FUN_4001a5e0"},
+    {"classifier": "string_change", "function": "FUN_400000d0"},
+    {"classifier": "auth_surface_change", "function": "FUN_4001a810"}
+  ],
+  "must_not_tag": [
+    {"classifier": "call_target_change", "function": "FUN_4002b120"},
+    {"classifier": "constant_change", "function": "FUN_400000d0"},
+    {"classifier": "bound_change", "function": "FUN_4002b120"}
+  ],
+  "summary": {
+    "changed": 5,
+    "added": 1,
+    "removed": 1,
+    "ambiguous": 0
+  }
+}

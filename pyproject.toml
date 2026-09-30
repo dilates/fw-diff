@@ -1,0 +1,89 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fw-diff"
+version = "0.1.0a1"
+description = "Explain what changed between two firmware images — deterministic diff, local-LLM annotation"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+authors = [{ name = "dilates" }]
+keywords = ["firmware", "reverse-engineering", "ghidra", "binary-diff", "security", "llm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Security",
+]
+dependencies = [
+    "typer>=0.12",
+    "rich>=13.7",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+ghidra = ["pyghidra>=1.2"]
+embed = ["fastembed>=0.4"]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "types-pyyaml",
+]
+
+[project.scripts]
+fw-diff = "fw_diff.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Zlo/fw-diff"
+Documentation = "https://github.com/Zlo/fw-diff/tree/main/docs"
+Issues = "https://github.com/Zlo/fw-diff/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fw_diff"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "docs", "README.md", "LICENSE", "CHANGELOG.md"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["E501"]  # line-length handled by formatter; long doc URLs allowed
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src/fw_diff"]
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = ["pyghidra.*", "ghidra.*", "fastembed.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "corpus: corpus cases (run in IR-fixture mode in CI; full mode needs toolchains)",
+    "ghidra: integration tests requiring a local Ghidra + pyghidra install",
+    "eval: LLM explainer eval (nightly, needs a local model)",
+]
+filterwarnings = ["error::DeprecationWarning:fw_diff.*"]
+
+[tool.coverage.run]
+source = ["src/fw_diff"]
+omit = ["src/fw_diff/demo/*"]

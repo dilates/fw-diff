@@ -1,0 +1,26 @@
+# Component ownership (CONTRIBUTING review-gate matrix)
+# Roles noted in comments — real handles land when contributors do.
+
+*                                   @Zlo
+
+# Engineering: matching / delta (2-approval zone)
+/fw_diff/match/                     @Zlo
+/fw_diff/delta/                     @Zlo
+/docs/design/pipeline-spec.md       @Zlo
+
+# Engineering: reports + schema (2-approval zone)
+/fw_diff/report/                    @Zlo
+/docs/design/report-format.md       @Zlo
+
+# Engineering: Ghidra + workers (security-relevant, 2-approval zone)
+/fw_diff/ghidra/                    @Zlo
+/docker/                            @Zlo
+/docs/THREAT_MODEL.md               @Zlo
+
+# Explain / LLM guardrails (2-approval zone)
+/fw_diff/explain/                   @Zlo
+
+# Community docs
+CONTRIBUTING.md                     @Zlo
+GOVERNANCE.md                       @Zlo
+SECURITY.md                         @Zlo

@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 3 * * *"   # nightly eval
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    name: docs (lint + links)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: markdownlint
+        uses: DavidAnson/markdownlint-cli2-action@v16
+        with:
+          globs: "**/*.md"
+      - name: link check
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        with:
+          config-file: .github/mlc-config.json
+          use-quiet-mode: true
+
+  python:
+    name: python (lint, types, tests)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --extra dev
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
+      - run: uv run mypy
+      - run: uv run pytest -m "not corpus and not ghidra and not eval" --cov=fw_diff
+            --cov-report=term --cov-fail-under=80
+
+  corpus:
+    name: corpus cases (IR-fixture mode)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev
+      - run: uv run pytest -m corpus
+
+  reproducibility:
+    name: facts.json byte-reproducibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev
+      - run: uv run pytest tests/test_facts.py::test_deterministic_reproducibility
+              tests/test_cli.py::test_demo_reproducible_bytes
+
+  ghidra:
+    name: ghidra integration (heavy, best-effort)
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: download ghidra 11.3.2
+        run: |
+          curl -sSL -o ghidra.zip \
+            https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_11.3.2_build/ghidra_11.3.2_PUBLIC_20250415.zip
+          unzip -q ghidra.zip && echo "GHIDRA_INSTALL_DIR=$PWD/ghidra_11.3.2_PUBLIC" >> "$GITHUB_ENV"
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev --extra ghidra
+      - run: uv run pytest -m ghidra
+
+  eval:
+    name: explainer eval (nightly, needs local model runner)
+    if: ${{ github.event_name == 'schedule' }}
+    continue-on-error: true
+    runs-on: [self-hosted, gpu]
+    steps:
+      - uses: actions/checkout@v4
+      - run: uv sync --extra dev
+      - run: uv run pytest -m eval --report=docs/evals/latest.json
