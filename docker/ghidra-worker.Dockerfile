@@ -19,7 +19,10 @@ RUN python3 -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir .
 
 # Ghidra 11.3.2 (pinned release URL; wheel below pairs with this exact version)
-ENV GHIDRA_INSTALL_DIR=/opt/ghidra
+ENV GHIDRA_INSTALL_DIR=/opt/ghidra \
+    JAVA_HOME_OVERRIDE=/opt/java/openjdk
+# ^ pyghidra skips LaunchSupport JDK discovery entirely when this is set (containers
+#   confound its /usr/lib/jvm scan)
 RUN curl -sSL -o /tmp/ghidra.zip \
       https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_11.3.2_build/ghidra_11.3.2_PUBLIC_20250415.zip \
     && unzip -q /tmp/ghidra.zip -d /opt \
