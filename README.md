@@ -27,6 +27,8 @@ $ fw-diff explain fw-1.4.2.bin fw-1.4.3.bin --arch armv7 --base 0x40000000
   Reports: out/report.html · out/report.md · out/facts.json
 ```
 
+![fw-diff HTML report — ranked changes with evidence tables](docs/screenshot.png)
+
 ## Why this exists
 
 Every existing binary-diff workflow stops at *“these functions changed.”* Nobody tells you
