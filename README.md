@@ -145,3 +145,4 @@ Start with [CONTRIBUTING.md](CONTRIBUTING.md). Found a vulnerability in fw-diff 
 ## License
 
 BSD-3-Clause — see [LICENSE](LICENSE).
+ 
