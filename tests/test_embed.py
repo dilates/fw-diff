@@ -11,16 +11,20 @@ from fw_diff.match import STAGE_EMBED, EmbeddingProvider, run_match
 
 
 class ScalarEmbedder(EmbeddingProvider):
-    """Deterministic toy embedder: vector keyed by token hash — no external model."""
+    """Deterministic toy embedder: vector keyed by a stable token hash — no external
+    model, no PYTHONHASHSEED dependence."""
 
     name = "scalar-test"
 
     def embed(self, texts: list[str]) -> list[list[float]]:
+        import hashlib
+
         vecs = []
         for text in texts:
             v = [0.0] * 16
             for tok in text.split():
-                v[hash(tok) % 16] += 1.0
+                digest = hashlib.blake2b(tok.encode("utf-8"), digest_size=8).digest()
+                v[int.from_bytes(digest, "big") % 16] += 1.0
             vecs.append(v)
         return vecs
 
