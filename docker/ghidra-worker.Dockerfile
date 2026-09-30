@@ -2,7 +2,8 @@
 # Build:  docker build -f docker/ghidra-worker.Dockerfile -t fw-diff-worker:11.3.2 .
 # Supply-chain note (THREAT_MODEL 3.4): pin the Ghidra release URL; the version check in
 # pyghidra's launcher is relaxed by the wheel bundled with this exact Ghidra.
-FROM eclipse-temurin:21-jre-noble
+# full JDK required: Ghidra's LaunchSupport rejects JRE-only homes (no javac)
+FROM eclipse-temurin:21-jdk-noble
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 python3-venv python3-pip unzip curl \
