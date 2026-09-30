@@ -194,6 +194,41 @@ def demo(
 
 
 @app.command()
+def timeline(
+    images: Annotated[list[Path], typer.Argument(help="two or more images, in order")],
+    arch: ArchOpt = None,
+    base: BaseOpt = None,
+    out: OutOpt = Path("out"),
+    worker_mode: Annotated[str, typer.Option("--worker-mode")] = "local",
+    deterministic: DetOpt = False,
+) -> None:
+    """Timeline: diff consecutive pairs (v1→v2, v2→v3, …) plus an index report."""
+    from fw_diff.timeline import run_timeline
+
+    opts = _opts(arch, base, out, "off", "off", None, deterministic, worker_mode, None, None, None)
+    try:
+        result = run_timeline(images, opts)
+    except (IngestError, PipelineError, ValueError) as exc:
+        err_console.print(f"error: {exc}")
+        raise typer.Exit(2) from exc
+    for row in result.summary_rows():
+        console.print(
+            f"[cyan]{row['old']} → {row['new']}[/cyan]: changed {row['changed']} · "
+            f"added {row['added']} · removed {row['removed']} · high {row['high']}"
+        )
+    if result.index_path:
+        console.print(f"[green]wrote[/green] index.md -> {result.index_path}")
+
+
+@app.command()
+def mcp() -> None:
+    """Run the MCP server on stdio (read-only session/facts tools for agents)."""
+    from fw_diff.mcp import main as mcp_main
+
+    raise typer.Exit(mcp_main())
+
+
+@app.command()
 def lift(
     old: Annotated[Path, typer.Argument()],
     new: Annotated[Path, typer.Argument()],

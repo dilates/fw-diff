@@ -52,18 +52,20 @@ The thinnest end-to-end slice that is still genuinely useful: two same-arch ELF 
 - [~] 16 MB pair perf budget: CI-safe fixture smoke shipped; real-image budget tracked
       locally at release
 
-## v0.3 — "Real firmware"
+## v0.3 — "Real firmware" ✅ (v0.3.0a1)
 
-- [ ] UBI/UBIFS, U-Boot legacy images, Android sparse images
-- [ ] Multi-image timeline mode: `fw-diff timeline v1 v2 v3 v4`
+- [x] UBI/UBIFS (optional `containers` extra), U-Boot legacy, Android sparse (pure-Python
+      sparse->raw + ELF carve); iOS .ipa/Mach-O/FAT support added (v0.3)
+- [x] Multi-image timeline mode: `fw-diff timeline v1 v2 v3 v4`
 - [ ] Manual mapping overrides (`--map pairs.tsv`) with round-trip through cache
-- [ ] Plugin API v1 (custom classifiers, renderers, ingestors) — stability commitment starts
-- [ ] Promoted-to-stable classifiers: crypto constant tables (AES S-box etc.), dangerous-API
+- [x] Plugin API v1 (custom classifiers shipped; renderers/ingestors same contract)
+      — stability commitment starts
+- [x] Promoted-to-stable classifiers: crypto constant tables (AES S-box etc.), dangerous-API
       proximity scoring (v1 of security relevance rubric)
 
-## v0.4 — "Ecosystem"
+## v0.4 — "Ecosystem" (MCP pulled forward into v0.3.0a1)
 
-- [ ] MCP server surface (expose sessions/facts to agent tooling)
+- [x] MCP server surface (`fw-diff mcp`: stdio JSON-RPC, read-only sessions/facts tools)
 - [ ] Homebrew formula; Windows support for the analyst CLI (workers stay Linux containers)
 - [ ] Community corpus contribution guide + review process
 - [ ] i18n-ready report templates

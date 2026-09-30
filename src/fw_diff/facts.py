@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 from dataclasses import dataclass
 
@@ -87,9 +88,13 @@ def _tag_pair(
 ) -> None:
     # imported here to avoid a circular import at module load
     from .classify import MatchContext, classify_change
+    from .plugins import apply_plugin_classifiers, load_classifiers
 
     ctx = MatchContext.from_match(old_map, new_map, match_result)
     classify_change(change, old_map, new_map, auth_old, auth_new, ctx)
+    # plugin surface must never break the deterministic core
+    with contextlib.suppress(Exception):
+        apply_plugin_classifiers(change, old_fn, new_fn, load_classifiers())
 
 
 def build_facts(

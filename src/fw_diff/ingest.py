@@ -12,9 +12,12 @@ import shutil
 import struct
 import subprocess
 import tarfile
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import android as android_fmt
+from . import ios as ios_fmt
 from .log import get_logger
 from .models import ImageManifest, LiftTarget
 
@@ -25,6 +28,7 @@ MAGIC_SQUASHFS = (b"hsqs", b"sqsh")
 MAGIC_GZIP = b"\x1f\x8b"
 MAGIC_CPIO = (b"070701", b"070702")
 MAGIC_UBOOT = b"\x27\x05\x19\x56"
+MAGIC_UBI = b"UBI#"
 
 EM_MAP: dict[int, str] = {
     3: "x86",
@@ -104,6 +108,14 @@ def _detect_format(path: Path) -> str | None:
         return "tar"
     if head.startswith(MAGIC_UBOOT):
         return "uboot"
+    if head[:4] == ios_fmt.MAGIC_ZIP:
+        return "zip"
+    if android_fmt.detect_sparse(path):
+        return "sparse_android"
+    if head.startswith(MAGIC_UBI):
+        return "ubi"
+    if ios_fmt.detect_macho(path) is not None:
+        return "macho"
     return None
 
 
@@ -136,6 +148,11 @@ def _extract_one(path: Path, fmt: str, out: Path, caps: ResourceCaps) -> None:
             timeout=caps.timeout_s,
             check=False,
         )
+    elif fmt == "zip":
+        try:
+            ios_fmt._safe_zip_extract(path, out)
+        except (zipfile.BadZipFile, ValueError) as exc:
+            raise IngestError(f"zip extraction failed: {exc}") from exc
     else:  # pragma: no cover - guarded by _detect_format dispatch
         raise IngestError(f"unknown archive format {fmt}")
 
@@ -169,7 +186,7 @@ def _unpack_chain(
     """Unpack archive formats recursively (depth-capped); returns the final payload path."""
     for _ in range(MAX_UNPACK_DEPTH):
         fmt = _detect_format(cur)
-        if fmt in (None, "elf"):
+        if fmt in (None, "elf", "macho"):
             break
         formats.append(fmt)
         if fmt == "gzip":
@@ -183,6 +200,36 @@ def _unpack_chain(
             notes.append("u-boot legacy header (64 bytes) stripped")
             cur = out
             continue
+        if fmt == "sparse_android":
+            out = workdir / f"raw_{len(formats)}.img"
+            out.write_bytes(android_fmt.sparse_to_raw(cur))
+            notes.append("Android sparse image converted to raw")
+            inner = _scan_carvable(out)
+            if inner is not None:
+                formats.append("tree:carved")
+                return out
+            cur = out
+            continue
+        if fmt == "ubi":
+            out = workdir / f"ubi_out_{len(formats)}"
+            out.mkdir(parents=True, exist_ok=True)
+            tool = shutil.which("ubireader_extract_files")
+            if tool is None:
+                notes.append(
+                    "UBI image detected but ubi-reader not installed "
+                    "(pip install 'fw-diff[containers]') — raw scan only"
+                )
+            else:
+                subprocess.run(
+                    [tool, str(cur), "-o", str(out)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=caps.timeout_s,
+                    check=False,
+                )
+                notes.append("UBI/UBIFS files extracted via ubi-reader")
+            formats.append("tree")
+            return out if out.exists() and any(out.iterdir()) else workdir
         out = workdir / f"unpacked_{len(formats)}"
         out.mkdir(parents=True, exist_ok=True)
         _extract_one(cur, fmt, out, caps)
@@ -195,11 +242,18 @@ def _unpack_chain(
     return cur
 
 
+def _scan_carvable(raw: Path) -> Path | None:
+    """Carve embedded ELFs from a raw image; returns the carved dir when found."""
+    out_dir = raw.parent / "carve"
+    carved = android_fmt.carve_to_files(raw, raw.parent)
+    return out_dir if carved else None
+
+
 def _first_inner_archive(tree: Path) -> Path | None:
     for p in sorted(tree.rglob("*")):
         if p.is_file() and not p.is_symlink():
             fmt = _detect_format(p)
-            if fmt in ("gzip", "squashfs", "cpio", "tar", "uboot"):
+            if fmt in ("gzip", "squashfs", "cpio", "tar", "uboot", "zip"):
                 return p
     return None
 
@@ -232,6 +286,21 @@ def ingest(
         manifest.formats.append("elf")
         manifest.targets.append(LiftTarget(path=str(path), arch=arch or "unknown", base=base))
         manifest.notes.append("ELF lifted at explicit --base")
+    elif fmt == "macho" and base is None:
+        macho = ios_fmt.detect_macho(path)
+        assert macho is not None
+        macho_arch, _filetype, slice_offset = macho
+        target_arch = arch or macho_arch
+        manifest.formats.append("macho")
+        if slice_offset != 0:  # fat binary: carve preferred slice
+            carved = path.with_suffix(".fwdiff-slice")
+            carved.write_bytes(ios_fmt.macho_slice(path, slice_offset))
+            manifest.targets.append(LiftTarget(path=str(carved), arch=macho_arch, base=None))
+            manifest.notes.append(f"carved slice from fat binary {path.name}")
+        else:
+            manifest.targets.append(LiftTarget(path=str(path), arch=target_arch, base=None))
+        if arch and arch != macho_arch:
+            manifest.notes.append(f"--arch {arch} overrides detected {macho_arch}")
     elif base is not None:
         manifest.formats.append("raw")
         manifest.targets.append(LiftTarget(path=str(path), arch=arch or "unknown", base=base))
@@ -250,25 +319,43 @@ def ingest(
             assert found is not None
             manifest.targets.append(LiftTarget(path=str(final), arch=arch or found[0], base=None))
         else:
-            el: list[tuple[str, Path]] = []
-            for p in sorted(workdir.rglob("*")):
-                if p.is_file() and not p.is_symlink() and detect_elf(p) is not None:
-                    el.append((str(p.relative_to(workdir)), p))
-            if el:
-                manifest.formats.append("tree:elf")
-                for _, p in el[:MAX_LIFT_TARGETS]:
-                    found = detect_elf(p)
-                    assert found is not None
-                    manifest.targets.append(LiftTarget(path=str(p), arch=found[0], base=None))
-                if len(el) > MAX_LIFT_TARGETS:
-                    manifest.notes.append(
-                        f"{len(el) - MAX_LIFT_TARGETS} ELF files beyond target cap skipped"
-                    )
+            # iOS bundles take priority (Payload/*.app with Info.plist metadata)
+            bundles = ios_fmt.find_app_bundles(workdir)
+            if bundles:
+                manifest.formats.append("ios:ipa")
+                ios_targets, ios_notes = ios_fmt.select_ios_targets(workdir, MAX_LIFT_TARGETS)
+                manifest.notes.extend(ios_notes)
+                for t_path, t_arch in ios_targets:
+                    manifest.targets.append(LiftTarget(path=str(t_path), arch=t_arch, base=None))
+                if not manifest.targets:
+                    raise IngestError("no Mach-O binaries found inside the .app bundle(s)")
             else:
-                raise IngestError(
-                    "no ELF found in the extracted tree; v0.1 cannot lift raw payloads "
-                    "from containers without --base"
-                )
+                el: list[tuple[str, Path]] = []
+                for p in sorted(workdir.rglob("*")):
+                    if not p.is_file() or p.is_symlink():
+                        continue
+                    elf = detect_elf(p)
+                    macho = None if elf is not None else ios_fmt.detect_macho(p)
+                    if elf is not None or macho is not None:
+                        el.append((str(p.relative_to(workdir)), p))
+                if el:
+                    manifest.formats.append("tree:binaries")
+                    for _, p in el[:MAX_LIFT_TARGETS]:
+                        elf = detect_elf(p)
+                        detected = elf if elf is not None else ios_fmt.detect_macho(p)
+                        assert detected is not None
+                        manifest.targets.append(
+                            LiftTarget(path=str(p), arch=detected[0], base=None)
+                        )
+                    if len(el) > MAX_LIFT_TARGETS:
+                        manifest.notes.append(
+                            f"{len(el) - MAX_LIFT_TARGETS} binaries beyond target cap skipped"
+                        )
+                else:
+                    raise IngestError(
+                        "no ELF/Mach-O found in the extracted tree; for raw payloads "
+                        "pass --base 0x... (and optionally --arch)"
+                    )
     return manifest
 
 

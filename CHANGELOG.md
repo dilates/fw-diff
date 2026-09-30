@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 (see [docs/release-process.md](docs/release-process.md)). `facts.json` schema has its own
 version field and [compatibility policy](docs/design/report-format.md#compatibility).
 
+## [0.3.0a1] — 2026-09-30
+
+### Added
+- **iOS app support** (.ipa): Mach-O/64-bit + FAT (universal) detection with arm64 slice
+  selection, safe zip extraction (traversal-safe, capped), main-executable-first target
+  selection over Payload/*.app bundles, Info.plist bundle metadata in manifest notes;
+  Ghidra's Mach-O loader does the lifting (aarch64/x86_64/armv7).
+- **Android sparse image support**: pure-Python sparse->raw conversion (RAW/FILL/
+  DONTCARE chunks) + ELF carving from raw images by magic scan (also serves generic
+  raw firmware with embedded ELFs).
+- **UBI/UBIFS** extraction via the optional `containers` extra (ubi-reader); honest
+  note when unavailable.
+- **Timeline mode** (`fw-diff timeline v1 v2 v3`): consecutive-pair diffs + aggregated
+  `index.md` per-leg report.
+- **Plugin API v1** (stability commitment starts): entrypoint-group discovery, classifier
+  plugins integrated after built-ins (pure, evidence-carrying, exception-isolated).
+- **MCP server** (`fw-diff mcp`, ROADMAP v0.4 pulled forward): stdio JSON-RPC 2.0 with
+  read-only tools (`fw_diff_sessions`, `fw_diff_get_facts`, `fw_diff_get_changes`) for
+  agent integration.
+
 ## [0.2.0a1] — 2026-09-30
 
 ### Added

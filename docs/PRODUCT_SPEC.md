@@ -101,8 +101,8 @@ for vendor patch-monitoring — deliberately not built now (ADR-0010).
 
 - Q1: Should `fw-diff` ship a small embedded embedding model (ONNX, ~30 MB) by default, or
   require Ollama for that stage too? *(Leaning: embed-onnx as default, Ollama for prose.)*
-- Q2: Multi-image N-way diff (`vendor v1..v5` timeline mode): v0.3 or post-1.0?
-- Q3: MCP server surface for agent integration: v0.4 candidate, keep out of v1 scope.
+- Q2 (resolved v0.3): timeline mode shipped — `fw-diff timeline v1 v2 v3`.
+- Q3 (resolved v0.3): MCP server shipped early — `fw-diff mcp` (read-only tools).
 
 ## 9. Decision log (product level)
 

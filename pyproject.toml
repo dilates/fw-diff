@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fw-diff"
-version = "0.2.0a1"
+version = "0.3.0a1"
 description = "Explain what changed between two firmware images — deterministic diff, local-LLM annotation"
 readme = "README.md"
 license = { file = "LICENSE" }

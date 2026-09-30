@@ -5,7 +5,8 @@
 
 **Explain what changed between two firmware images — in plain English.**
 
-fw-diff takes two firmware builds (ELFs, raw binaries, or packaged images), lifts both through
+fw-diff takes two firmware builds (ELFs, raw binaries, **iOS .ipa bundles**, Android
+sparse/UBI images, or other packaged images), lifts both through
 [Ghidra](https://ghidra-sre.org/) headless, matches functions across builds, computes a
 **deterministic structural diff**, and then annotates every change with a security-aware,
 human-readable explanation — using a **local LLM by default**. No cloud required.
@@ -99,6 +100,8 @@ fw-diff doctor                          # verifies the environment
 
 fw-diff explain fw-1.4.2.bin fw-1.4.3.bin --base 0x40000000
 fw-diff ci fw-1.4.2.bin fw-1.4.3.bin --policy policy.yaml
+fw-diff timeline fw-1.4.1.bin fw-1.4.2.bin fw-1.4.3.bin   # release-train diff
+fw-diff mcp                                               # agent integration
 ```
 
 Runs fully offline with any [Ollama](https://ollama.com)-served model; zero API keys needed.
@@ -112,6 +115,12 @@ Remote OpenAI-compatible endpoints are opt-in via `--llm-url`. All numeric gates
 | pip / pipx | `pipx install fw-diff` | recommended for analysts |
 | Docker | `docker run ghcr.io/dilates/fw-diff explain …` | worker sandboxing built in |
 | from source | `uv sync && uv run fw-diff --help` | see [CONTRIBUTING](CONTRIBUTING.md) |
+
+## Agent integration (MCP)
+
+`fw-diff mcp` runs a read-only MCP server on stdio — sessions, facts, and change lists
+exposed to MCP-compatible agents (editors, pipelines). The analysis pipeline
+stays CLI-side; the server only reads the local session store.
 
 ## Status
 

@@ -59,7 +59,7 @@ def test_ingest_tar_gz_with_elf_inside(tiny_elf: Path, tmp_path: Path) -> None:
         tf.add(tree / "fw.bin", arcname="fw.bin")
     manifest = ingest(tar, tmp_path / "work", ResourceCaps())
     assert "gzip" in manifest.formats or "tar" in manifest.formats
-    assert "tree:elf" in manifest.formats
+    assert "tree:binaries" in manifest.formats
     assert manifest.targets and manifest.targets[0].arch in ("x86", "x86_64")
 
 
