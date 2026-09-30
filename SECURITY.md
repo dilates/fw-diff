@@ -4,7 +4,7 @@
 
 fw-diff is a security tool; vulnerabilities in it are treated seriously.
 
-- **Report privately:** open a GitHub [security advisory](https://github.com/Zlo/fw-diff/security/advisories/new)
+- **Report privately:** open a GitHub [security advisory](https://github.com/dilates/fw-diff/security/advisories/new)
   (preferred) or email the address on the repository profile (PGP available on request).
 - **Do not** open a public issue for suspected vulnerabilities.
 - Please include: affected version, reproduction (especially crafted inputs — we will treat

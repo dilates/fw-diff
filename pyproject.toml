@@ -45,9 +45,9 @@ dev = [
 fw-diff = "fw_diff.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/Zlo/fw-diff"
-Documentation = "https://github.com/Zlo/fw-diff/tree/main/docs"
-Issues = "https://github.com/Zlo/fw-diff/issues"
+Homepage = "https://github.com/dilates/fw-diff"
+Documentation = "https://github.com/dilates/fw-diff/tree/main/docs"
+Issues = "https://github.com/dilates/fw-diff/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/fw_diff"]

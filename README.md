@@ -1,6 +1,6 @@
 # fw-diff
 
-[![CI](https://github.com/Zlo/fw-diff/actions/workflows/ci.yml/badge.svg)](https://github.com/Zlo/fw-diff/actions/workflows/ci.yml)
+[![CI](https://github.com/dilates/fw-diff/actions/workflows/ci.yml/badge.svg)](https://github.com/dilates/fw-diff/actions/workflows/ci.yml)
 [![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
 
 **Explain what changed between two firmware images — in plain English.**

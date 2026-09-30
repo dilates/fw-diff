@@ -18,7 +18,7 @@
 Install from source:
 
 ```bash
-git clone https://github.com/Zlo/fw-diff && cd fw-diff
+git clone https://github.com/dilates/fw-diff && cd fw-diff
 uv sync && uv run fw-diff --version
 uv run fw-diff doctor    # validates Ghidra path, Java, disk space, model reachability
 ```

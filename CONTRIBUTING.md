@@ -7,7 +7,7 @@ corpus-driven tests**. Reading [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
 ## Dev setup
 
 ```bash
-git clone https://github.com/Zlo/fw-diff && cd fw-diff
+git clone https://github.com/dilates/fw-diff && cd fw-diff
 uv sync --extra dev         # or: python -m venv .venv && pip install -e '.[dev]'
 uv pip install 'fw-diff[ghidra]'  # optional: pyghidra (Ghidra 11.3.x pair; see README)
 export GHIDRA_INSTALL_DIR=/path/to/ghidra   # 11.3+ required
