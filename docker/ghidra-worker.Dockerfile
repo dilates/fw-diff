@@ -6,7 +6,10 @@ FROM eclipse-temurin:21-jre-noble
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 python3-venv python3-pip unzip curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /usr/lib/jvm && ln -s "$JAVA_HOME" /usr/lib/jvm/java-21-openjdk
+# ^ Ghidra's LaunchSupport discovers JDKs by scanning /usr/lib/jvm; temurin installs to
+#   /opt/java/openjdk, so expose it there (THREAT_MODEL supply-chain: same pinned image)
 
 WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
