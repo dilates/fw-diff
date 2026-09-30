@@ -151,17 +151,10 @@ class Store:
         sdir = self.sessions / session_id
         if not sdir.exists():
             return False
-        # collect referenced blobs, then drop dir and GC unreferenced blobs
-        referenced: set[str] = set()
-        try:
-            conn = sqlite3.connect(sdir / "session.db")
-            for (sha,) in conn.execute("SELECT blob_sha FROM artifacts"):
-                referenced.add(sha)
-            conn.close()
-        except sqlite3.DatabaseError:
-            pass
         shutil.rmtree(sdir, ignore_errors=True)
-        self.gc(keep=referenced)
+        # GC now sees remaining sessions only: this session's blobs vanish unless
+        # another session references them (content-addressed sharing, ADR-0005)
+        self.gc()
         return True
 
     def gc(self, keep: set[str] | None = None, older_days: float | None = None) -> int:
