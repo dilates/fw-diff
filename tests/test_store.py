@@ -76,3 +76,36 @@ def test_list_sessions_ignores_corrupt_db() -> None:
     store.create_session("broken")
     (store.sessions / "broken" / "session.db").write_bytes(b"not a database")
     assert store.list_sessions() == []
+
+
+def test_lift_cache_roundtrip() -> None:
+    store = Store()
+    payload = {"functions": [{"id": "F0001"}], "ghidra_version": "11.3.2"}
+    store.put_lift_cache("a" * 64, "armv7", None, None, payload)
+    key = store.lift_cache_key("a" * 64, "armv7", None, None)
+    assert store.get_lift_cache(key) == payload
+
+
+def test_lift_cache_key_distinguishes_params() -> None:
+    store = Store()
+    k1 = store.lift_cache_key("a" * 64, "armv7", None, None)
+    k2 = store.lift_cache_key("a" * 64, "aarch64", None, None)
+    k3 = store.lift_cache_key("a" * 64, "armv7", 0x40000000, None)
+    k4 = store.lift_cache_key("a" * 64, "armv7", None, 100)
+    assert len({k1, k2, k3, k4}) == 4
+
+
+def test_lift_cache_miss_returns_none() -> None:
+    store = Store()
+    assert store.get_lift_cache("b" * 64) is None
+
+
+def test_lift_cache_corrupt_index_is_a_miss() -> None:
+    store = Store()
+    store.put_lift_cache("c" * 64, "x86", None, None, {"ok": True})
+    key = store.lift_cache_key("c" * 64, "x86", None, None)
+    conn = store._cache_db()
+    conn.execute("UPDATE lift_cache SET blob_sha = 'ff' WHERE key = ?", (key,))
+    conn.commit()
+    conn.close()
+    assert store.get_lift_cache(key) is None

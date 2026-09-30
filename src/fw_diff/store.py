@@ -36,6 +36,14 @@ CREATE TABLE IF NOT EXISTS artifacts (
 );
 """
 
+_CACHE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS lift_cache (
+    key TEXT PRIMARY KEY,
+    blob_sha TEXT NOT NULL,
+    created REAL NOT NULL
+);
+"""
+
 
 @dataclass
 class SessionPaths:
@@ -129,6 +137,47 @@ class Store:
             ).fetchall()
         conn.close()
         return sorted(rows)
+
+    def _cache_db(self) -> sqlite3.Connection:
+        self.root.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(self.root / "cache.db")
+        conn.executescript(_CACHE_SCHEMA)
+        return conn
+
+    def lift_cache_key(
+        self, file_sha: str, arch: str, base: int | None, max_functions: int | None
+    ) -> str:
+        return sha256_bytes(f"lift|{file_sha}|{arch}|{base}|{max_functions}".encode())
+
+    def get_lift_cache(self, key: str) -> dict[str, object] | None:
+        conn = self._cache_db()
+        row = conn.execute("SELECT blob_sha FROM lift_cache WHERE key = ?", (key,)).fetchone()
+        conn.close()
+        if row is None:
+            return None
+        try:
+            loaded: object = json.loads(self.get_blob(row[0]))
+            return loaded if isinstance(loaded, dict) else None
+        except (FileNotFoundError, json.JSONDecodeError):
+            return None
+
+    def put_lift_cache(
+        self,
+        file_sha: str,
+        arch: str,
+        base: int | None,
+        max_functions: int | None,
+        payload: dict[str, object],
+    ) -> None:
+        key = self.lift_cache_key(file_sha, arch, base, max_functions)
+        blob_sha = self.put_json(payload)
+        conn = self._cache_db()
+        with conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO lift_cache (key, blob_sha, created) VALUES (?, ?, ?)",
+                (key, blob_sha, time.time()),
+            )
+        conn.close()
 
     def list_sessions(self) -> list[dict[str, str]]:
         out: list[dict[str, str]] = []

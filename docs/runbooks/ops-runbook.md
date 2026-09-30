@@ -32,17 +32,21 @@ uv run fw-diff doctor    # validates Ghidra path, Java, disk space, model reacha
 - **Do not edit session DBs with external tools while a session is open** (single-writer lock;
   ADR-0005)
 
-## 3. Container workers
+## 3. Container workers (shipped v0.2)
 
 ```bash
-docker pull ghcr.io/dilates/fw-diff-worker:11.3.2
+docker build -f docker/ghidra-worker.Dockerfile -t fw-diff-worker:11.3.2 .
+fw-diff ci old.bin new.bin --policy policy.yaml          # --worker-mode auto: uses docker
 fw-diff ci old.bin new.bin --worker-mode docker --policy policy.yaml
 ```
 
 - Workers get: no network, read-only rootfs, mem/cpu/pids caps, tmpfs scratch (ADR-0008)
-- `fw-diff doctor --worker-mode docker` smoke-tests the image pull + a hello-lift run
-- Updating Ghidra: build/pull new worker tag, bump `ghidra` pin in repo, CI matrix updates in
-  the same PR (cache keys change → plan for cold cache on next runs)
+- Results cross the boundary as IR-bundle JSON on a mounted volume; the host never runs
+  container code and the container never sees the network
+- Updating Ghidra: bump the pinned release URL in the Dockerfile + pyghidra wheel pair,
+  rebuild the image; the lift cache invalidates automatically (payload carries the version)
+- `fw-diff doctor` shows docker availability; the `worker` CI job builds the image and
+  runs the sandbox tests on GitHub runners
 
 ## 4. Common failures
 

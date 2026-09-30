@@ -12,9 +12,11 @@ uv sync --extra dev         # or: python -m venv .venv && pip install -e '.[dev]
 uv pip install 'fw-diff[ghidra]'  # optional: pyghidra (Ghidra 11.3.x pair; see README)
 export GHIDRA_INSTALL_DIR=/path/to/ghidra   # 11.3+ required
 uv run fw-diff doctor       # verifies environment
-uv run pytest -m "not corpus and not ghidra and not eval"   # default suite
+uv run pytest -m "not corpus and not ghidra and not eval and not worker"  # default suite
 uv run pytest -m corpus     # corpus cases in IR-fixture mode (fast, no Ghidra)
 uv run pytest -m ghidra     # real-Ghidra integration (needs local Ghidra)
+uv run pytest -m worker     # docker sandbox tests (needs docker; CI runs them)
+uv run pytest -m eval       # explainer eval vs local Ollama
 ```
 
 ## Ground rules

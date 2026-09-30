@@ -23,6 +23,8 @@
 | Eval (LLM) | explainer factuality/usefulness rubric vs corpus ground truth | nightly + release |
 | Perf | budget table from ARCHITECTURE §7 on fixed hardware class | weekly + release |
 | Fuzz | image ingest + unpack robustness (crash-only) | nightly, OSS-Fuzz candidate post-v0.2 |
+| Worker | docker sandbox lift e2e (ADR-0008) | CI `worker` job (builds image) |
+| Perf | fixture pipeline bound | every PR (`pytest -m perf`) |
 
 ## 3. Corpus layout
 

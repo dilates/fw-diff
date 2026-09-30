@@ -137,7 +137,9 @@ def ci(
     arch: ArchOpt = None,
     base: BaseOpt = None,
     out: OutOpt = Path("out"),
-    worker_mode: WorkerOpt = "local",
+    worker_mode: Annotated[
+        str, typer.Option("--worker-mode", help="auto (default) | local | docker")
+    ] = "auto",
     map_file: MapOpt = None,
     deterministic: DetOpt = True,
 ) -> None:

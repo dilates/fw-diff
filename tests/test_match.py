@@ -10,11 +10,11 @@ from fw_diff.match import STAGE_ANCHOR, STAGE_EXACT, STAGE_STRUCT, Thresholds, r
 def test_demo_stage_mix(demo_matched) -> None:
     _, _, result, _, _ = demo_matched
     counts = result.method_counts()
-    # parse_header + log_event (symbols) + main (entry) anchor; helper_unpack + hmac via
-    # unique struct hash; process_input + checksum via structural voting
-    assert counts[STAGE_ANCHOR] == 3
+    # S0 pins: main (entry + same FUN name), parse_header/log_event (symbols), and the
+    # three unchanged same-address functions; S2 votes for the two rebuilt-shifted ones
+    assert counts[STAGE_ANCHOR] == 6
     assert counts.get(STAGE_EXACT, 0) == 0  # fixture callee ordinals make exact rare
-    assert counts[STAGE_STRUCT] == 4
+    assert counts[STAGE_STRUCT] == 1
     assert result.added == ["F0016"]  # telemetry_loop
     assert result.removed == ["F0007"]  # legacy_auth_check
 
@@ -39,10 +39,11 @@ def test_exact_stage_precedes_struct() -> None:
     assign_ids(new_ir, offset=len(old_ir))
     result, _, _ = run_match(old_ir, new_ir)
     by_new = result.by_new_id()
-    # helper_unpack is identical modulo layout ordinals -> exact/struct-unique, not S2 vote
+    _ = by_new
+    # helper_unpack is identical modulo layout ordinals -> pinned/exact/struct, not S2 vote
     helper = next(p for p in result.pairs if p.new_id == "F0014")
     _ = by_new
-    assert helper.method in (STAGE_EXACT, STAGE_STRUCT)
+    assert helper.method in (STAGE_EXACT, STAGE_STRUCT, STAGE_ANCHOR)
     assert helper.confidence >= 0.95
 
 

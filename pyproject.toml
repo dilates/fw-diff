@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fw-diff"
-version = "0.1.0a1"
+version = "0.2.0a1"
 description = "Explain what changed between two firmware images — deterministic diff, local-LLM annotation"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -82,6 +82,9 @@ markers = [
     "corpus: corpus cases (run in IR-fixture mode in CI; full mode needs toolchains)",
     "ghidra: integration tests requiring a local Ghidra + pyghidra install",
     "eval: LLM explainer eval (nightly, needs a local model)",
+    "worker: docker worker tests (skipif no docker; CI builds the worker image)",
+    "perf: perf-budget smoke tests (CI-safe fixture bounds)",
+    "embed: tests that use a real fastembed model",
 ]
 filterwarnings = ["error::DeprecationWarning:fw_diff.*"]
 

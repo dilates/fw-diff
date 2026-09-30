@@ -52,6 +52,8 @@ them work headless on symbol-less, multi-arch firmware inside CI.
 - **`report.html`** — interactive side-by-side decompilation with per-change explanations,
   function graph, and evidence links.
 - **`report.md`** — the changelog your patch notes were missing.
+- **`sarif.json`** — SARIF 2.1 for GitHub code scanning / IDEs (high → warning,
+  medium → note, low → omitted).
 - **CLI policy engine** — fail CI on classes of change (`--fail-on bound_change,new_crypto`).
 
 ## How it works
@@ -87,6 +89,10 @@ fw-diff demo --out out/          # full pipeline on a synthetic firmware pair
 Real firmware (Ghidra 11.3+ required — tested against 11.3.2, Java 21):
 
 ```bash
+fw-diff explain old.bin new.bin --embed   # adds the S3 embedding stage (fastembed)
+```
+
+```bash
 pipx install 'fw-diff[ghidra]'
 export GHIDRA_INSTALL_DIR=/opt/ghidra   # or the bundled wheel: pip install <ghidra>/Ghidra/Features/PyGhidra/pypkg/dist/pyghidra-*.whl
 fw-diff doctor                          # verifies the environment
@@ -109,11 +115,13 @@ Remote OpenAI-compatible endpoints are opt-in via `--llm-url`. All numeric gates
 
 ## Status
 
-**v0.1.0a1 — implemented.** Deterministic core works end-to-end: ingest → Ghidra lift →
-normalize → multi-stage match → delta → classifiers → facts/reports, plus the local-LLM
-explain layer (evidence-validated). CI-tested with a byte-reproducibility gate.
-See [docs/ROADMAP.md](docs/ROADMAP.md) for what's next (S3 embeddings, SARIF, docker
-workers) and [docs/PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md) for scope.
+**v0.2.0a1 — implemented.** Deterministic core end-to-end (ingest → Ghidra lift →
+normalize → multi-stage match → delta → classifiers → facts/reports), local-LLM explain
+layer with evidence-validated claims, **SARIF 2.1** output, **docker worker sandboxing**
+(ADR-0008), **blob-level lift cache**, S3 embedding stage (optional), and a nightly eval
+harness. CI gates: lint/types ×3 Python versions, corpus, byte-reproducibility, docs,
+real-Ghidra integration, docker-worker sandbox. See
+[docs/ROADMAP.md](docs/ROADMAP.md) and [docs/PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md).
 
 ## Documentation
 

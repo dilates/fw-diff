@@ -77,14 +77,32 @@ class Thresholds:
     delta_margin: float = DELTA_MARGIN
     embed_sim_min: float = EMBED_SIM_MIN
     max_rounds: int = MAX_ROUNDS
+    # per-arch overrides (ROADMAP v0.2): arch -> {"tau": ..., "delta_margin": ...}
+    arch_overrides: dict[str, dict[str, float]] = field(default_factory=dict)
+
+    def for_arch(self, arch: str) -> Thresholds:
+        """Thresholds with per-arch overrides applied (used by the matcher)."""
+        overrides = self.arch_overrides.get(arch, {})
+        if not overrides:
+            return self
+        return Thresholds(
+            tau=float(overrides.get("tau", self.tau)),
+            delta_margin=float(overrides.get("delta_margin", self.delta_margin)),
+            embed_sim_min=float(overrides.get("embed_sim_min", self.embed_sim_min)),
+            max_rounds=self.max_rounds,
+            arch_overrides=self.arch_overrides,
+        )
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        out: dict[str, object] = {
             "tau": self.tau,
             "delta_margin": self.delta_margin,
             "embed_sim_min": self.embed_sim_min,
             "max_rounds": self.max_rounds,
         }
+        if self.arch_overrides:
+            out["arch_overrides"] = dict(sorted(self.arch_overrides.items()))
+        return out
 
 
 def _jaccard(a: set[str], b: set[str]) -> float:
@@ -152,6 +170,17 @@ class Matcher:
     # -- stages ----------------------------------------------------------------
 
     def _stage0_anchors(self) -> None:
+        # name pins: identical raw names (Ghidra FUN_hex encodes the address) are the
+        # same function by construction; also covers symbol-preserved builds
+        old_by_name: dict[str, list[str]] = {}
+        for fid, fn in self.old_ir.items():
+            old_by_name.setdefault(fn.name, []).append(fid)
+        for new_id, fn in sorted(self.new_ir.items()):
+            if new_id in self._matched_new:
+                continue
+            candidates = [c for c in old_by_name.get(fn.name, []) if c not in self._matched_old]
+            if len(candidates) == 1:
+                self._accept(candidates[0], new_id, STAGE_ANCHOR, 1.0)
         old_syms: dict[str, list[str]] = {}
         for fid, fn in self.old_ir.items():
             for sym in fn.symbols:
@@ -224,7 +253,8 @@ class Matcher:
         return candidates
 
     def _stage2_structural(self) -> None:
-        tau = self.thresholds.tau
+        arch = next(iter(self.new_ir.values())).arch if self.new_ir else "unknown"
+        tau = self.thresholds.for_arch(arch).tau
         for _ in range(self.thresholds.max_rounds):
             best_old: dict[str, tuple[float, str]] = {}
             best_new: dict[str, tuple[float, str]] = {}
@@ -287,10 +317,17 @@ class Matcher:
                 continue
             top_sim, top_old = sims[0]
             margin = top_sim - (sims[1][0] if len(sims) > 1 else 0.0)
-            if top_sim >= self.thresholds.embed_sim_min and margin >= self.thresholds.delta_margin:
+            arch = next(iter(self.new_ir.values())).arch if self.new_ir else "unknown"
+            arch_t = self.thresholds.for_arch(arch)
+            if top_sim >= arch_t.embed_sim_min and margin >= arch_t.delta_margin:
                 self._accept(top_old, new_id, STAGE_EMBED, top_sim)
             elif top_sim >= self.thresholds.tau:
                 self._record_ambiguous(top_old, new_id, top_sim)
+
+    def _arch(self) -> str:
+        if not self.new_ir:
+            return "unknown"
+        return next(iter(self.new_ir.values())).arch
 
     def _finish(self) -> None:
         self.result.added = sorted(fid for fid in self.new_ir if fid not in self._matched_new)

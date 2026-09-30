@@ -56,12 +56,15 @@ def _java_version() -> tuple[bool, str]:
 
 
 def _ollama() -> tuple[bool, str]:
-    try:
-        with urllib.request.urlopen(f"{DEFAULT_OLLAMA_URL}/models", timeout=2) as resp:
-            body = resp.read().decode()[:120]
-        return True, f"reachable ({body[:60]}…)" if len(body) > 60 else f"reachable ({body})"
-    except (urllib.error.URLError, OSError, TimeoutError):
-        return False, f"not reachable at {DEFAULT_OLLAMA_URL} (optional; --llm off works)"
+    base = DEFAULT_OLLAMA_URL.removesuffix("/v1")
+    for path in ("/v1/models", "/api/tags"):
+        try:
+            with urllib.request.urlopen(f"{base}{path}", timeout=2) as resp:
+                body = resp.read().decode()[:120]
+            return True, f"reachable ({body[:60]}…)" if len(body) > 60 else f"reachable ({body})"
+        except (urllib.error.URLError, OSError, TimeoutError):
+            continue
+    return False, f"not reachable at {DEFAULT_OLLAMA_URL} (optional; --llm off works)"
 
 
 def run_checks() -> list[Check]:

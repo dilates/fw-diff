@@ -42,8 +42,8 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run ruff check .
       - run: uv run mypy
-      - run: uv run pytest -m "not corpus and not ghidra and not eval" --cov=fw_diff
-            --cov-report=term --cov-fail-under=80
+      - run: uv run pytest -m "not corpus and not ghidra and not eval and not worker"
+              --cov=fw_diff --cov-report=term --cov-fail-under=80
 
   corpus:
     name: corpus cases (IR-fixture mode)
@@ -63,6 +63,17 @@ jobs:
       - run: uv sync --extra dev
       - run: uv run pytest tests/test_facts.py::test_deterministic_reproducibility
               tests/test_cli.py::test_demo_reproducible_bytes
+
+  worker:
+    name: docker worker mode (ADR-0008 sandbox)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev
+      - name: build worker image
+        run: docker build -f docker/ghidra-worker.Dockerfile -t fw-diff-worker:11.3.2 .
+      - run: uv run pytest -m worker
 
   ghidra:
     name: ghidra integration (heavy, best-effort)

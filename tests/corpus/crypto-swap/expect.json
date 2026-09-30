@@ -1,0 +1,27 @@
+{
+  "must_tag": [
+    {
+      "classifier": "crypto_constant_change",
+      "function": "FUN_2000",
+      "relevance": "medium"
+    },
+    {
+      "classifier": "constant_change",
+      "function": "FUN_2000"
+    }
+  ],
+  "must_not_tag": [
+    {
+      "classifier": "string_change",
+      "function": "FUN_3000"
+    },
+    {
+      "classifier": "bound_change",
+      "function": "FUN_2000"
+    }
+  ],
+  "summary": {
+    "added": 0,
+    "removed": 0
+  }
+}

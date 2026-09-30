@@ -3,6 +3,8 @@ render → (policy). One function per full run; granular steps are importable fo
 
 from __future__ import annotations
 
+import json
+import shutil
 import tempfile
 import uuid
 from dataclasses import dataclass, field
@@ -10,6 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from .embed import make_embedder
 from .explain import ExplainConfig, explain_facts
 from .facts import assign_ids, build_facts, compute_changes, deterministic_session_id
 from .ingest import ResourceCaps, choose_pair_targets, ingest
@@ -18,6 +21,7 @@ from .match import EmbeddingProvider, Thresholds, apply_manual_map, run_match
 from .models import FactsDoc, FunctionIR, ImageManifest, LiftTarget, SessionInfo
 from .policy import PolicyDecision, evaluate_policy
 from .render import render_html, render_markdown
+from .sarif import render_sarif
 from .store import Store, sha256_bytes
 
 log = get_logger("fw_diff.pipeline")
@@ -38,6 +42,7 @@ class PipelineOptions:
     jvm_heap: str | None = None
     worker_mode: str = "local"
     map_pairs: list[tuple[str, str]] = field(default_factory=list)
+    use_embeddings: bool = False
     embedder: EmbeddingProvider | None = None
     ghidra_dir: str | None = None
 
@@ -63,6 +68,7 @@ def _session_info(
         "deterministic": opts.deterministic,
         "policy_sha256": policy_sha,
         "worker_mode": opts.worker_mode,
+        "embed_model": opts.embedder.name if opts.embedder else None,
     }
     if opts.deterministic:
         sid = deterministic_session_id(old.sha256, new.sha256)
@@ -76,37 +82,82 @@ def _session_info(
 
 
 def _lift_both(
-    old_target: LiftTarget, new_target: LiftTarget, opts: PipelineOptions, workdir: Path
+    old_target: LiftTarget,
+    new_target: LiftTarget,
+    opts: PipelineOptions,
+    workdir: Path,
+    store: Store | None = None,
 ) -> tuple[list[FunctionIR], list[FunctionIR], str]:
+    """Lift both sides (docker worker, auto, or local) with a blob-level lift cache
+    (ROADMAP v0.2): the cache key includes the file sha + lift params; the payload
+    carries the Ghidra version, so an upgrade invalidates automatically."""
     if opts.worker_mode == "docker":
-        raise PipelineError(
-            "worker-mode docker arrives in v0.2 (ROADMAP); use local mode or the CI "
-            "fixture path for now"
-        )
+        from .worker import lift_in_container
+
+        with stage(log, "lift", count=2, mode="docker"):
+            old_out = lift_in_container(old_target, workdir)
+            new_out = lift_in_container(new_target, workdir)
+        if old_out.ghidra_version != new_out.ghidra_version:
+            log.warning("ghidra versions differ between sides", extra={"count": 2})
+        return old_out.functions, new_out.functions, old_out.ghidra_version or "unknown"
+    if opts.worker_mode == "auto":
+        opts.worker_mode = "docker" if shutil.which("docker") else "local"
+        if opts.worker_mode == "local":
+            log.warning(
+                "docker unavailable; falling back to local (in-process) lift",
+                extra={"count": 1},
+            )
+        return _lift_both(old_target, new_target, opts, workdir, store)
+
     from .ghidra_lift import lift_image
+    from .store import sha256_file
+
+    def _cached_lift(target: LiftTarget, tag: str) -> tuple[dict[str, Any], str]:
+        if store is not None:
+            key = store.lift_cache_key(
+                sha256_file(Path(target.path)), target.arch, target.base, opts.max_functions
+            )
+            hit = store.get_lift_cache(key)
+            if hit is not None:
+                log.info("lift cache hit", extra={"stage": "lift", "count": 1})
+                return hit, str(hit["ghidra_version"])
+        out = lift_image(
+            target.path,
+            arch=target.arch,
+            base=target.base,
+            workdir=str(workdir / f"lift_{tag}"),
+            max_functions=opts.max_functions,
+            jvm_heap=opts.jvm_heap,
+            ghidra_dir=opts.ghidra_dir,
+        )
+        payload: dict[str, object] = {
+            "functions": [fn.to_dict() for fn in out.functions],
+            "ghidra_version": out.ghidra_version,
+            "skipped_functions": out.skipped_functions,
+            "lift_gaps": out.lift_gaps,
+        }
+        if store is not None:
+            store.put_lift_cache(
+                sha256_file(Path(target.path)),
+                target.arch,
+                target.base,
+                opts.max_functions,
+                payload,
+            )
+        return payload, out.ghidra_version or "unknown"
 
     with stage(log, "lift", count=2):
-        old_out = lift_image(
-            old_target.path,
-            arch=old_target.arch,
-            base=old_target.base,
-            workdir=str(workdir / "lift_old"),
-            max_functions=opts.max_functions,
-            jvm_heap=opts.jvm_heap,
-            ghidra_dir=opts.ghidra_dir,
-        )
-        new_out = lift_image(
-            new_target.path,
-            arch=new_target.arch,
-            base=new_target.base,
-            workdir=str(workdir / "lift_new"),
-            max_functions=opts.max_functions,
-            jvm_heap=opts.jvm_heap,
-            ghidra_dir=opts.ghidra_dir,
-        )
-    if old_out.ghidra_version != new_out.ghidra_version:
+        old_payload, old_version = _cached_lift(old_target, "old")
+        new_payload, new_version = _cached_lift(new_target, "new")
+    old_ir = [FunctionIR.from_dict(d) for d in old_payload["functions"]]
+    new_ir = [FunctionIR.from_dict(d) for d in new_payload["functions"]]
+    for ir_list, image, version in ((old_ir, "old", old_version), (new_ir, "new", new_version)):
+        for fn in ir_list:
+            fn.image = image
+            fn.meta["ghidra"] = version
+    if old_version != new_version:
         log.warning("ghidra versions differ between sides", extra={"count": 2})
-    return old_out.functions, new_out.functions, old_out.ghidra_version or "unknown"
+    return old_ir, new_ir, old_version or "unknown"
 
 
 def run_from_ir(
@@ -122,6 +173,8 @@ def run_from_ir(
     """Full pipeline from already-lifted IR (demo/fixtures). Real runs go via run_pipeline."""
     store = Store()
     thresholds = Thresholds()
+    if opts.embedder is None and opts.use_embeddings:
+        opts.embedder = make_embedder(True)
     old_manifest = old_manifest or ImageManifest(
         path="fixture-old",
         sha256=sha256_bytes(b"\n".join(fn.pseudocode_raw.encode() for fn in old_ir)),
@@ -187,7 +240,8 @@ def run_pipeline(
                 Path(new_path), workdir / "ingest_new", caps, arch=opts.arch, base=opts.base
             )
         old_target, new_target = choose_pair_targets(old_manifest, new_manifest)
-        old_ir, new_ir, ghidra_version = _lift_both(old_target, new_target, opts, workdir)
+        store = Store()
+        old_ir, new_ir, ghidra_version = _lift_both(old_target, new_target, opts, workdir, store)
         result = run_from_ir(
             old_ir,
             new_ir,
@@ -214,10 +268,14 @@ def _render_all(doc: FactsDoc, out_dir: Path) -> dict[str, Path]:
         "facts.json": out_dir / "facts.json",
         "report.md": out_dir / "report.md",
         "report.html": out_dir / "report.html",
+        "sarif.json": out_dir / "sarif.json",
     }
     paths["facts.json"].write_text(doc.to_json(), encoding="utf-8")
     paths["report.md"].write_text(render_markdown(doc), encoding="utf-8")
     paths["report.html"].write_text(render_html(doc), encoding="utf-8")
+    paths["sarif.json"].write_text(
+        json.dumps(render_sarif(doc), sort_keys=True, indent=2) + "\n", encoding="utf-8"
+    )
     return paths
 
 

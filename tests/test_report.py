@@ -48,8 +48,10 @@ def test_html_no_external_urls(doc) -> None:
 def test_html_escapes_snippets(doc) -> None:
     doc.changes[0].edits[0].new_snippet = '<script>alert("x")</script>'
     page = render_html(doc)
-    assert "<script>" not in page
+    # the only <script> allowed is fw-diff's own filter JS; injected code must be escaped
+    assert 'alert("x")' not in page
     assert "&lt;script&gt;" in page
+    assert page.count("<script>") == 1
 
 
 def test_llm_provenance_visible_when_explain_present(doc) -> None:

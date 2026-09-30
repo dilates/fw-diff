@@ -103,6 +103,8 @@ pre{padding:.6rem;overflow-x:auto}
 .ins{color:#12745a;background:#e7f6f1;display:block;padding:.1rem .4rem}
 .del{color:#8f1d1d;background:#fbeaea;display:block;padding:.1rem .4rem}
 footer{margin-top:3rem;font-size:.75rem;color:#777;border-top:1px solid #ddd;padding-top:.6rem}
+#filter-text{font-family:inherit;padding:.2rem .4rem;border:1px solid #bbb;border-radius:.25rem}
+tr.hidden{display:none}
 """
 
 
@@ -148,10 +150,16 @@ def render_html(doc: FactsDoc) -> str:
             for ev in t.evidence
         )
         rows.append(
-            f"<tr><td><code>{e(change.id)}</code></td>"
+            f'<tr class="change-row" data-relevance="{e(change.relevance.score)}" '
+            f'data-tags="{e(",".join(t.tag for t in change.tags))}" '
+            f'data-name="{e(change.new_name)}" data-id="{e(change.id)}">'
+            f"<td><code>{e(change.id)}</code></td>"
             f"<td><code>{e(change.new_name)}</code></td>"
             f"<td>{badge(change.relevance.score)}</td><td>{e(tags)}</td><td>{e(hyp)}</td></tr>"
-            f"<tr><td colspan=5>{explain_html}{edits_html}"
+            f'<tr class="change-row" data-relevance="{e(change.relevance.score)}" '
+            f'data-tags="{e(",".join(t.tag for t in change.tags))}" '
+            f'data-name="{e(change.new_name)}" data-id="{e(change.id)}">'
+            f"<td colspan=5>{explain_html}{edits_html}"
             + (
                 f"<table><tr><th>tag</th><th>evidence kind</th><th>detail</th></tr>"
                 f"{evidence_rows}</table>"
@@ -184,6 +192,21 @@ def render_html(doc: FactsDoc) -> str:
         first_prov: dict[str, Any] = next(c.explain.provenance for c in doc.changes if c.explain)
         provenance = f'<p class="meta">LLM provenance: {e(str(first_prov))}</p>'
 
+    filter_js = (
+        "<script>(function(){var input=document.getElementById('filter-text');"
+        "var boxes=document.querySelectorAll('.rel-filter');"
+        "function apply(){var q=(input.value||'').toLowerCase();"
+        "var on={};boxes.forEach(function(b){on[b.value]=b.checked;});"
+        "var rows=document.querySelectorAll('tr.change-row');"
+        "var grouped=null;rows.forEach(function(r){"
+        "if(r.cells.length>2){var vis=on[r.dataset.relevance]&&(!q||"
+        "(r.dataset.name+' '+r.dataset.tags+' '+r.dataset.id).toLowerCase().indexOf(q)>=0);"
+        "r.classList.toggle('hidden',!vis);grouped=vis;}"
+        "else{r.classList.toggle('hidden',!grouped);}});}"
+        "input.addEventListener('input',apply);"
+        "boxes.forEach(function(b){b.addEventListener('change',apply);});})();"
+        "</script>"
+    )
     return (
         "<!doctype html><html><head><meta charset=utf-8>"
         "<title>fw-diff report</title><style>" + _CSS + "</style></head><body>"
@@ -192,8 +215,17 @@ def render_html(doc: FactsDoc) -> str:
         f"session {e(s.id)} · {e(str(s.created_utc or 'deterministic session'))}</p>"
         f"<p><b>Matched {matched}/{summ['functions']['old']}</b> · "
         f"changed {summ['changed']} · added {summ['added']} · removed {summ['removed']} · "
-        f"ambiguous {summ['ambiguous']}</p>" + provenance + "<h2>Changes (by relevance)</h2><table>"
-        "<tr><th>id</th><th>function</th><th>relevance</th><th>tags</th><th>CWE hyp.</th></tr>"
+        f"ambiguous {summ['ambiguous']}</p>"
+        + provenance
+        + "<h2>Changes (by relevance)</h2>"
+        + '<p class="meta">Filter: '
+        + '<input id="filter-text" type="text" placeholder="function, tag, id…" '
+        'style="width:16rem"> '
+        + '<label><input type="checkbox" class="rel-filter" value="high" checked> high</label> '
+        + '<label><input type="checkbox" class="rel-filter" value="medium" checked> medium</label> '
+        + '<label><input type="checkbox" class="rel-filter" value="low" checked> low</label></p>'
+        + '<table id="changes-table"><thead><tr>'
+        "<th>id</th><th>function</th><th>relevance</th><th>tags</th><th>CWE hyp.</th></tr></thead>"
         + "".join(rows)
         + "</table>"
         + (
@@ -214,6 +246,7 @@ def render_html(doc: FactsDoc) -> str:
             if doc.ambiguous
             else ""
         )
+        + filter_js
         + "<h2>Appendix</h2>"
         f"<pre>{e(str(summ['matches']))}</pre>"
         f"<pre>{e(str(s.config))}</pre>"

@@ -155,8 +155,9 @@ def explain_facts(
     url = config.resolved_url()
     explained = 0
     dropped_total = 0
-    for start in range(0, len(doc.changes), BATCH_SIZE):
-        batch = doc.changes[start : start + BATCH_SIZE]
+
+    def _request(batch: list[Change]) -> None:
+        nonlocal explained, dropped_total
         user_ctx = "\n\n".join(
             _change_context(c, new_ir[c.new_id], new_norm[c.new_id]) for c in batch
         )
@@ -168,17 +169,26 @@ def explain_facts(
         )
         try:
             raw = _chat(url, config.model, _SYSTEM_PROMPT, user, api_key, TIMEOUT_S)
-        except ExplainError as exc:
+        except ExplainError:
             log.warning(
                 "explain batch failed; omitting explain sections",
                 extra={"stage": "explain", "count": len(batch)},
             )
-            log.debug("explain error", extra={"stage": "explain"})
-            _ = exc  # recorded via absence of explain blocks
-            continue
+            return
         dropped = _apply_batch(doc, batch, raw, config)
         explained += len(batch)
         dropped_total += dropped
+
+    for start in range(0, len(doc.changes), BATCH_SIZE):
+        _request(doc.changes[start : start + BATCH_SIZE])
+
+    # coverage retry pass (ROADMAP v0.2 eval): small models often answer only part of a
+    # multi-change batch — retry each still-unexplained change on its own before giving up
+    unexplained = [c for c in doc.changes if c.explain is None]
+    if unexplained:
+        log.info("explain retry pass", extra={"stage": "explain", "count": len(unexplained)})
+        for change in unexplained:
+            _request([change])
     return explained, dropped_total
 
 
@@ -205,7 +215,7 @@ def _apply_batch(doc: FactsDoc, batch: list[Change], raw: str, config: ExplainCo
     by_id = {c.id: c for c in batch}
     dropped = 0
     for entry in parsed.get("changes", []):
-        cid = str(entry.get("id", ""))
+        cid = str(entry.get("id") or entry.get("change_id") or "")
         change = by_id.get(cid)
         if change is None:
             dropped += 1

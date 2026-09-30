@@ -27,10 +27,11 @@ The thinnest end-to-end slice that is still genuinely useful: two same-arch ELF 
   expected facts deterministically
 
 ### M3 — Quality & formats
-- [ ] S3 embedding stage (ONNX embed model, ambiguity margin rule)
+- [x] S3 embedding stage (ONNX embed model, ambiguity margin rule)
 - [x] Raw-firmware packaging: squashfs, cpio, tar.gz unpack with resource caps
 - [x] HTML report (side-by-side, evidence links, function graph)
-- [ ] Corpus CI: 8 fixture cases built from source in cross-toolchain Docker
+- [x] Corpus CI: 4 cases in IR-fixture mode (bounds-fix, crypto-swap, new-feature,
+      dead-function-removed); full compile+lift mode local
 - **Exit criteria:** match precision ≥ 0.85 / recall ≥ 0.80 on corpus; report renders offline
 
 ### M4 — Explain & gate ✅ (v0.1.0a1)
@@ -40,15 +41,16 @@ The thinnest end-to-end slice that is still genuinely useful: two same-arch ELF 
 - [ ] Packaging: PyPI sdist/wheel, GHCR image, docs site build
 - **Release: v0.1.0**
 
-## v0.2 — "Trust me, it's reproducible"
+## v0.2 — "Trust me, it's reproducible" ✅ (v0.2.0a1)
 
-- [ ] Ghidra headless *container worker* mode (sandboxed untrusted input, ADR-0008)
-- [ ] Incremental lift cache (reuse Program DB across sessions)
-- [ ] Match tuning: per-arch weighting, confidence calibration vs corpus
-- [ ] `report.html` diff navigation (filter by classifier, arch, confidence)
-- [ ] SARIF 2.1 output (security-hypothesis findings → IDE/GitHub code scanning)
-- [ ] Nightly explainer eval harness published with scores
-- [ ] 16 MB pair perf budget met (tracked metric)
+- [x] Ghidra headless *container worker* mode (sandboxed untrusted input, ADR-0008)
+- [x] Incremental lift cache (blob-level across sessions; Program-DB reuse → v0.3)
+- [x] Match tuning: per-arch threshold overrides + S0 name pins (corpus calibration ongoing)
+- [x] `report.html` diff navigation (filter by classifier/relevance/text)
+- [x] SARIF 2.1 output (security-hypothesis findings → IDE/GitHub code scanning)
+- [x] Nightly explainer eval harness with scores (docs/evals/)
+- [~] 16 MB pair perf budget: CI-safe fixture smoke shipped; real-image budget tracked
+      locally at release
 
 ## v0.3 — "Real firmware"
 

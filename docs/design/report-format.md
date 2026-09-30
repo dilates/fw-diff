@@ -119,7 +119,7 @@ treat both as opaque.
 - `summary.ambiguous` — count of pairs rejected by the S3 margin rule; they also appear in
   `ambiguous[]` for human mapping.
 
-## SARIF mapping (v0.2)
+## SARIF mapping (shipped in v0.2)
 
 Each change with `security_relevance ∈ {high}` emits one SARIF `result`:
 `ruleId = "fwdiff/<primary classifier tag>"`, `level = warning`, message = narrative +
