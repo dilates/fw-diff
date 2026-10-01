@@ -39,8 +39,9 @@ We support it where free (raw PE/ELF), but do not optimize for it.
 ### v1 includes
 
 - CLI tool, single binary feel: `fw-diff {lift,match,delta,explain,report,ci}`
-- Inputs: ELF (any Ghidra-supported arch), raw flat binary + `--base`, packed images
-  (squashfs, cpio, tar.gz sysupgrade)
+- Inputs (v0.4 AIO): ELF, Mach-O/FAT + iOS .ipa, PE (exe/dll/sys), APK (dex + native
+  libs), Switch NRO/NSO, UEFI FV, raw + `--base`, squashfs/cpio/tar/deb/rpm/7z-family,
+  Android sparse/UBI, directory trees
 - Two-image comparison sessions, cached and resumable
 - Deterministic diff facts + three renderers (JSON/Markdown/HTML)
 - Local-first LLM annotation (Ollama default, OpenAI-compatible opt-in), fully optional

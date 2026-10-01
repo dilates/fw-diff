@@ -63,7 +63,11 @@ The thinnest end-to-end slice that is still genuinely useful: two same-arch ELF 
 - [x] Promoted-to-stable classifiers: crypto constant tables (AES S-box etc.), dangerous-API
       proximity scoring (v1 of security relevance rubric)
 
-## v0.4 — "Ecosystem" (MCP pulled forward into v0.3.0a1)
+## v0.4 — "Ecosystem" ✅ (v0.4.0a1)
+
+- [x] AIO binary-format surface: Windows PE, Android APK (dex + native libs), Switch
+      NRO/NSO, UEFI FV, .deb/.rpm, 7z-family fallback (MSI/CAB/DMG/pkg/appx),
+      directory-tree ingest
 
 - [x] MCP server surface (`fw-diff mcp`: stdio JSON-RPC, read-only sessions/facts tools)
 - [ ] Homebrew formula; Windows support for the analyst CLI (workers stay Linux containers)

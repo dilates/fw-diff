@@ -5,9 +5,10 @@
 
 **Explain what changed between two firmware images — in plain English.**
 
-fw-diff takes two firmware builds (ELFs, raw binaries, **iOS .ipa bundles**, Android
-sparse/UBI images, or other packaged images), lifts both through
-[Ghidra](https://ghidra-sre.org/) headless, matches functions across builds, computes a
+fw-diff takes two builds of **almost anything that executes** — Linux/Windows/Mac
+binaries (ELF/PE/Mach-O), **iOS .ipa**, **Android .apk**, Switch NRO/NSO, UEFI firmware
+volumes, .deb/.rpm/MSI/CAB/DMG packages, raw flash dumps, or extracted directory trees —
+lifts both through [Ghidra](https://ghidra-sre.org/) headless, matches functions across builds, computes a
 **deterministic structural diff**, and then annotates every change with a security-aware,
 human-readable explanation — using a **local LLM by default**. No cloud required.
 

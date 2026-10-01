@@ -5,6 +5,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 (see [docs/release-process.md](docs/release-process.md)). `facts.json` schema has its own
 version field and [compatibility policy](docs/design/report-format.md#compatibility).
 
+## [0.4.0a1] — 2026-09-30
+
+### Added
+- **AIO binary-format surface** (the all-in-one push):
+  - **Windows PE** (exe/dll/sys, PE32 & PE32+, incl. .NET assemblies) — machine-type
+    detection with false-positive guards (x86/x86_64/armv7/aarch64)
+  - **Android APK** — lib/<abi>/*.so native libs first, classes*.dex targets (Ghidra's
+    dex-reader lifts bytecode), ABI notes from the layout
+  - **Nintendo Switch** NRO/NSO (aarch64), **UEFI firmware volumes** (_FVH)
+  - **.deb** (pure-Python ar + tar.gz/xz/zst members), **.rpm** via rpm2cpio when present
+  - **Generic 7z fallback** for MSI/CAB/DMG/7z/pkg(xar)/appx when 7zz/7za/7z is installed
+    (honest hard error with install hint otherwise)
+  - **Directory-tree ingest**: pass extracted .app/.framework/firmware trees directly
+  - Central `detect_binary` used by every tree scan (ELF/Mach-O/PE/DEX/Switch/UEFI)
+- Conservative detection: known-filetype whitelist + load-command sanity caps (the
+  Info.plist false-positive lesson from v0.3, applied everywhere).
+
 ## [0.3.0a1] — 2026-09-30
 
 ### Added

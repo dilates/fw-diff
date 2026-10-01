@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import android as android_fmt
+from . import formats as fmt_mod
 from . import ios as ios_fmt
 from .log import get_logger
 from .models import ImageManifest, LiftTarget
@@ -116,6 +117,20 @@ def _detect_format(path: Path) -> str | None:
         return "ubi"
     if ios_fmt.detect_macho(path) is not None:
         return "macho"
+    if fmt_mod.detect_pe(path) is not None:
+        return "pe"
+    if fmt_mod.detect_dex(path):
+        return "dex"
+    if fmt_mod.detect_switch(path) is not None:
+        return "switch"
+    if fmt_mod.detect_uefi_fv(path):
+        return "uefi"
+    if fmt_mod.is_ar(path):
+        return "ar"
+    if fmt_mod.is_7z(path) or fmt_mod.is_msi(path) or fmt_mod.is_cab(path):
+        return "sevenz"
+    if fmt_mod.looks_like_dmg(path) or _ext(path) in (".pkg", ".rpm", ".deb", ".apk"):
+        return _ext(path).lstrip(".")
     return None
 
 
@@ -186,7 +201,7 @@ def _unpack_chain(
     """Unpack archive formats recursively (depth-capped); returns the final payload path."""
     for _ in range(MAX_UNPACK_DEPTH):
         fmt = _detect_format(cur)
-        if fmt in (None, "elf", "macho"):
+        if fmt in (None, "elf", "macho", "pe", "dex", "switch", "uefi"):
             break
         formats.append(fmt)
         if fmt == "gzip":
@@ -210,6 +225,42 @@ def _unpack_chain(
                 return out
             cur = out
             continue
+        if fmt in ("deb", "ar"):
+            out = workdir / f"deb_out_{len(formats)}"
+            out.mkdir(parents=True, exist_ok=True)
+            notes.extend(fmt_mod.deb_extract(cur, out, caps.timeout_s))
+            formats.append("ar")
+            inner = _first_inner_archive(out) or (
+                _scan_carvable_dir(out) if _has_binaries(out) else None
+            )
+            if inner is None:
+                formats.append("tree")
+                return out
+            cur = inner
+            continue
+        if fmt == "rpm":
+            out = workdir / f"rpm_out_{len(formats)}"
+            out.mkdir(parents=True, exist_ok=True)
+            if not fmt_mod.rpm_to_cpio(cur, out, caps.timeout_s):
+                raise IngestError(
+                    ".rpm detected but rpm2cpio/cpio are not installed — install them "
+                    "(or repackage via 7z)"
+                )
+            notes.append("rpm payload extracted via rpm2cpio")
+            formats.append("tree")
+            return out
+        if fmt == "sevenz" or fmt in ("dmg", "pkg", "msi", "cab", "7z"):
+            out = workdir / f"7z_out_{len(formats)}"
+            out.mkdir(parents=True, exist_ok=True)
+            if not fmt_mod.sevenz_available():
+                raise IngestError(
+                    f"{fmt} detected but no 7z tool installed (7zz/7za/7z) — install "
+                    "one to unpack this format"
+                )
+            fmt_mod.sevenz_extract(cur, out, caps.timeout_s)
+            notes.append(f"{fmt} extracted via 7z")
+            formats.append("tree")
+            return out
         if fmt == "ubi":
             out = workdir / f"ubi_out_{len(formats)}"
             out.mkdir(parents=True, exist_ok=True)
@@ -242,6 +293,21 @@ def _unpack_chain(
     return cur
 
 
+def _ext(path: Path) -> str:
+    return path.suffix.lower()
+
+
+def _has_binaries(tree: Path) -> bool:
+    for p in sorted(tree.rglob("*")):
+        if p.is_file() and not p.is_symlink() and fmt_mod.detect_binary(p):
+            return True
+    return False
+
+
+def _scan_carvable_dir(tree: Path) -> Path | None:
+    return tree if _has_binaries(tree) else None
+
+
 def _scan_carvable(raw: Path) -> Path | None:
     """Carve embedded ELFs from a raw image; returns the carved dir when found."""
     out_dir = raw.parent / "carve"
@@ -268,6 +334,8 @@ def ingest(
 ) -> ImageManifest:
     """Detect, unpack (with caps), and choose lift targets for one image."""
     path = Path(path)
+    if path.is_dir():
+        return _ingest_dir(path, workdir, caps)
     if not path.is_file():
         raise IngestError(f"input not found: {path}")
     manifest = ImageManifest(path=str(path), sha256=sha256_file(path))
@@ -301,6 +369,13 @@ def ingest(
             manifest.targets.append(LiftTarget(path=str(path), arch=target_arch, base=None))
         if arch and arch != macho_arch:
             manifest.notes.append(f"--arch {arch} overrides detected {macho_arch}")
+    elif fmt in ("pe", "dex", "switch", "uefi") and base is None:
+        detected = fmt_mod.detect_binary(path)
+        assert detected is not None
+        manifest.formats.append(fmt)
+        manifest.targets.append(LiftTarget(path=str(path), arch=arch or detected, base=None))
+        if fmt == "uefi":
+            manifest.notes.append("UEFI firmware volume: Ghidra parses FV contents")
     elif base is not None:
         manifest.formats.append("raw")
         manifest.targets.append(LiftTarget(path=str(path), arch=arch or "unknown", base=base))
@@ -319,43 +394,96 @@ def ingest(
             assert found is not None
             manifest.targets.append(LiftTarget(path=str(final), arch=arch or found[0], base=None))
         else:
-            # iOS bundles take priority (Payload/*.app with Info.plist metadata)
-            bundles = ios_fmt.find_app_bundles(workdir)
-            if bundles:
-                manifest.formats.append("ios:ipa")
-                ios_targets, ios_notes = ios_fmt.select_ios_targets(workdir, MAX_LIFT_TARGETS)
-                manifest.notes.extend(ios_notes)
-                for t_path, t_arch in ios_targets:
-                    manifest.targets.append(LiftTarget(path=str(t_path), arch=t_arch, base=None))
-                if not manifest.targets:
-                    raise IngestError("no Mach-O binaries found inside the .app bundle(s)")
-            else:
-                el: list[tuple[str, Path]] = []
-                for p in sorted(workdir.rglob("*")):
-                    if not p.is_file() or p.is_symlink():
-                        continue
-                    elf = detect_elf(p)
-                    macho = None if elf is not None else ios_fmt.detect_macho(p)
-                    if elf is not None or macho is not None:
-                        el.append((str(p.relative_to(workdir)), p))
-                if el:
-                    manifest.formats.append("tree:binaries")
-                    for _, p in el[:MAX_LIFT_TARGETS]:
-                        elf = detect_elf(p)
-                        detected = elf if elf is not None else ios_fmt.detect_macho(p)
-                        assert detected is not None
-                        manifest.targets.append(
-                            LiftTarget(path=str(p), arch=detected[0], base=None)
-                        )
-                    if len(el) > MAX_LIFT_TARGETS:
-                        manifest.notes.append(
-                            f"{len(el) - MAX_LIFT_TARGETS} binaries beyond target cap skipped"
-                        )
-                else:
-                    raise IngestError(
-                        "no ELF/Mach-O found in the extracted tree; for raw payloads "
-                        "pass --base 0x... (and optionally --arch)"
-                    )
+            selected = _select_tree_targets(workdir, MAX_LIFT_TARGETS, manifest)
+            if not selected:
+                raise IngestError(
+                    "no lift-able binaries (ELF/Mach-O/PE/DEX) found in the extracted "
+                    "tree; for raw payloads pass --base 0x... (and optionally --arch)"
+                )
+            manifest.targets.extend(selected)
+    return manifest
+
+
+def _select_tree_targets(
+    workdir: Path, max_targets: int, manifest: ImageManifest
+) -> list[LiftTarget]:
+    """Target selection for extracted trees: iOS .app, Android APK libs/dex, then any
+    lift-able binary (ELF/Mach-O/PE/DEX/Switch/UEFI) — capped, sorted, deterministic."""
+    # iOS bundles take priority (Payload/*.app with Info.plist metadata)
+    bundles = ios_fmt.find_app_bundles(workdir)
+    if bundles:
+        manifest.formats.append("ios:ipa")
+        ios_targets, ios_notes = ios_fmt.select_ios_targets(workdir, max_targets)
+        manifest.notes.extend(ios_notes)
+        return [
+            LiftTarget(path=str(t_path), arch=t_arch, base=None) for t_path, t_arch in ios_targets
+        ]
+
+    # Android APK layout: lib/<abi>/*.so (ELF) + classes*.dex
+    apk_markers = list(workdir.rglob("AndroidManifest.xml")) or list(workdir.rglob("classes.dex"))
+    if apk_markers:
+        manifest.formats.append("android:apk")
+        targets: list[LiftTarget] = []
+        abis = sorted(
+            {
+                p.parent.name
+                for p in workdir.rglob("lib/*/*.so")
+                if p.is_file() and not p.is_symlink()
+            }
+        )
+        if abis:
+            manifest.notes.append(f"apk native ABIs: {', '.join(abis)}")
+        dexes = [
+            p for p in sorted(workdir.rglob("classes*.dex")) if p.is_file() and not p.is_symlink()
+        ]
+        libs = [
+            p for p in sorted(workdir.rglob("lib/*/*.so")) if p.is_file() and not p.is_symlink()
+        ]
+        if not dexes and not libs:
+            manifest.notes.append("apk without native libs or dex targets")
+            return []
+        for so in libs[:max_targets]:
+            detected = fmt_mod.detect_binary(so) or "unknown"
+            targets.append(LiftTarget(path=str(so), arch=detected, base=None))
+        if len(libs) > max_targets:
+            manifest.notes.append(f"{len(libs) - max_targets} native libs beyond cap skipped")
+        for dex in dexes[: max(0, max_targets - len(targets))]:
+            targets.append(LiftTarget(path=str(dex), arch="dex", base=None))
+        manifest.notes.append(f"apk targets: {len(libs)} native libs + {len(dexes)} dex")
+        return targets
+
+    # generic tree: any lift-able binary
+    targets = []
+    skipped = 0
+    for p in sorted(workdir.rglob("*")):
+        if not p.is_file() or p.is_symlink():
+            continue
+        binary_arch: str | None = fmt_mod.detect_binary(p)
+        if binary_arch is None:
+            continue
+        if len(targets) >= max_targets:
+            skipped += 1
+            continue
+        targets.append(LiftTarget(path=str(p), arch=binary_arch, base=None))
+    if skipped:
+        manifest.notes.append(f"{skipped} binaries beyond target cap skipped")
+    if targets:
+        manifest.formats.append("tree:binaries")
+    return targets
+
+
+def _ingest_dir(path: Path, workdir: Path, caps: ResourceCaps) -> ImageManifest:
+    """Directory-tree ingest: .app/.framework bundles, extracted firmware trees, APK dirs."""
+    manifest = ImageManifest(path=str(path), sha256="dir")
+    manifest.formats.append("dir")
+    entries, total = _enforce_caps(path, caps)
+    manifest.notes.append(f"tree entries={entries} bytes={total}")
+    selected = _select_tree_targets(path, MAX_LIFT_TARGETS, manifest)
+    if not selected:
+        raise IngestError(
+            "directory contains no lift-able binaries (ELF/Mach-O/PE/DEX/Switch/UEFI)"
+        )
+    manifest.targets.extend(selected)
     return manifest
 
 
