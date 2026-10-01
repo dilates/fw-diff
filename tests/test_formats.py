@@ -207,3 +207,67 @@ def test_rpm_without_tools(tmp_path: Path) -> None:
 
 
 _ = io, gzip  # stdlib parity with formats module
+
+
+def test_rpm_to_cpio_with_stub_tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """rpm_to_cpio covered via stub rpm2cpio/cpio scripts on a fake PATH."""
+    import os
+    import shutil
+
+    stub_dir = tmp_path / "stubs"
+    stub_dir.mkdir()
+    (stub_dir / "rpm2cpio").write_text("#!/bin/sh\necho dummy-cpio-payload\n")
+    (stub_dir / "cpio").write_text("#!/bin/sh\nexit 0\n")
+    for stub in ("rpm2cpio", "cpio"):
+        (stub_dir / stub).chmod(0o755)
+    real_which = shutil.which
+    monkeypatch.setattr(
+        shutil,
+        "which",
+        lambda name, *a, **k: (
+            str(stub_dir / name) if name in ("rpm2cpio", "cpio") else real_which(name, *a, **k)
+        ),
+    )
+    rpm = tmp_path / "pkg.rpm"
+    rpm.write_bytes(b"\xed\xab\xee\xdb" + b"\x00" * 100)
+    out = tmp_path / "rpm_out"
+    out.mkdir()
+    assert fmt_mod.rpm_to_cpio(rpm, out, 60) is True
+    assert not (out / "payload.cpio").exists()  # converted + cleaned up
+    _ = os
+
+
+def test_ingest_sevenz_with_stub_tool(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Full 7z-family path: 7z-magic file (zip payload inside) + stub 7zz extractor."""
+    import shutil
+
+    stub = tmp_path / "stubs" / "7zz"
+    stub.parent.mkdir()
+    stub.write_text(
+        "#!/bin/sh\n"
+        'python3 -c "import zipfile,sys; '
+        'zipfile.ZipFile(sys.argv[4]).extractall(sys.argv[3].lstrip(\'-o\'))" "$@"\n'
+    )
+    stub.chmod(0o755)
+    real_which = shutil.which
+    monkeypatch.setattr(
+        shutil,
+        "which",
+        lambda name, *a, **k: str(stub) if name == "7zz" else real_which(name, *a, **k),
+    )
+
+    tree = tmp_path / "inner"
+    (tree / "usr" / "bin").mkdir(parents=True)
+    (tree / "usr" / "bin" / "tool").write_bytes(_elf(tmp_path))
+    zipped = tmp_path / "payload.zip"
+    with zipfile.ZipFile(zipped, "w") as zf:
+        for p in tree.rglob("*"):
+            if p.is_file():
+                zf.write(p, p.relative_to(tree))
+    blob = tmp_path / "payload.7z"
+    blob.write_bytes(b"7z\xbc\xaf\x27\x1c" + zipped.read_bytes())
+
+    manifest = ingest(blob, tmp_path / "work", ResourceCaps())
+    assert "sevenz" in manifest.formats
+    assert any("7z" in n for n in manifest.notes)
+    assert manifest.targets, "ELF inside must become a lift target"

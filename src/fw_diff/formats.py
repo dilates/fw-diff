@@ -139,9 +139,11 @@ def sevenz_available() -> bool:
 
 def sevenz_extract(path: Path, out: Path, timeout_s: int) -> None:
     """Generic last-resort unpacker: MSI, CAB, DMG, 7z, appx, pkg (xar), ISO…"""
-    binary = next(b for b in SEVENZ_BINARIES if shutil.which(b))
+    resolved = next((full for b in SEVENZ_BINARIES if (full := shutil.which(b))), None)
+    if resolved is None:  # pragma: no cover - guarded by sevenz_available upstream
+        raise ValueError("no 7z tool available")
     subprocess.run(
-        [binary, "x", "-y", f"-o{out}", str(path)],
+        [resolved, "x", "-y", f"-o{out}", str(path)],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         timeout=timeout_s,
